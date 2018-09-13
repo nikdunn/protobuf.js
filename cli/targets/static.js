@@ -22,6 +22,10 @@ static_target.description = "Static code without reflection (non-functional on i
 function static_target(root, options, callback) {
     config = options;
     try {
+
+        push('var wrapper = require("./wrapper");');
+        push("");
+
         var aliases = [];
         if (config.decode)
             aliases.push("Reader");
@@ -587,43 +591,64 @@ function buildType(ref, type) {
 
 function buildService(ref, service) {
 
+    // Interface for the server to implement
+    if (config.comments) {
+        var typeDef = [
+            "Properties of " + aOrAn(service.name) + ".",
+            service.parent instanceof protobuf.Root ? "@exports " + escapeName("I" + service.name) : "@memberof " + exportName(service.parent),
+            "@interface " + escapeName("I" + service.name)
+        ];
+        push("");
+        pushComment(typeDef);
+        service.methodsArray.forEach(function(method) {
+            method.resolve();
+            push("");
+
+            var comments = [
+                "Does all the things!",
+                "@function " + method.name,
+                "@instance",
+                "@abstract",
+                "@memberof " + exportName(service, true)];
+
+            if (!method.requestStream && !method.responseStream) {
+                comments.push("@param {grpc.ServerUnaryCall<" + method.requestType + ">} call");
+                comments.push("@param {grpc.sendUnaryData<" + exportName(method.resolvedResponseType, true) + ">} callback");
+            }
+            else if (method.requestStream && !method.responseStream) {
+                comments.push("@param {grpc.ServerReadableStream<" + method.requestType + ">} call");
+                comments.push("@param {grpc.sendUnaryData<" + exportName(method.resolvedResponseType, true) + ">} callback");
+            }
+            else if (!method.requestStream && method.responseStream) {
+                comments.push("@param {grpc.ServerWriteableStream<" + method.requestType + ">} call");
+            }
+            else if (method.requestStream && method.responseStream) {
+                comments.push("@param {grpc.ServerDuplexStream<" + method.requestType + "," + exportName(method.resolvedResponseType, true) + ">} call");
+            }
+
+            pushComment(comments);
+        });
+    }
+
+    // Wrapper class to use with Websocket implementation.
     push("");
     pushComment([
-        "Constructs a new " + service.name + " service.",
+        "Constructs a new " + service.name + " WebSocket client.",
         service.parent instanceof protobuf.Root ? "@exports " + escapeName(service.name) : "@memberof " + exportName(service.parent),
-        "@classdesc " + (service.comment || "Represents " + aOrAn(service.name)),
-        "@extends $protobuf.rpc.Service",
+        "@classdesc a Websocket wrapper around this service.",
+        "@extends wrapper.WSClient",
         "@constructor",
-        "@param {$protobuf.RPCImpl} rpcImpl RPC implementation",
-        "@param {boolean} [requestDelimited=false] Whether requests are length-delimited",
-        "@param {boolean} [responseDelimited=false] Whether responses are length-delimited"
+        "@param {WebSocket} websocket WebSocket to communicate on",
+        "@param {wrapper.Callback} callback callback to call when the websocket makes a connection and is ready.",
     ]);
-    push("function " + escapeName(service.name) + "(rpcImpl, requestDelimited, responseDelimited) {");
+    push("function " + escapeName(service.name) + "(ws, callback) {");
     ++indent;
-    push("$protobuf.rpc.Service.call(this, rpcImpl, requestDelimited, responseDelimited);");
+    push("return Reflect.construct(wrapper.WSClient, arguments, " + escapeName(service.name) + ');');
     --indent;
     push("}");
     push("");
-    push("(" + escapeName(service.name) + ".prototype = Object.create($protobuf.rpc.Service.prototype)).constructor = " + escapeName(service.name) + ";");
-
-    if (config.create) {
-        push("");
-        pushComment([
-            "Creates new " + service.name + " service using the specified rpc implementation.",
-            "@function create",
-            "@memberof " + exportName(service),
-            "@static",
-            "@param {$protobuf.RPCImpl} rpcImpl RPC implementation",
-            "@param {boolean} [requestDelimited=false] Whether requests are length-delimited",
-            "@param {boolean} [responseDelimited=false] Whether responses are length-delimited",
-            "@returns {" + escapeName(service.name) + "} RPC service. Useful where requests and/or responses are streamed."
-        ]);
-        push(escapeName(service.name) + ".create = function create(rpcImpl, requestDelimited, responseDelimited) {");
-            ++indent;
-            push("return new this(rpcImpl, requestDelimited, responseDelimited);");
-            --indent;
-        push("};");
-    }
+    push("Reflect.setPrototypeOf(" + escapeName(service.name) + ".prototype, wrapper.WSClient.prototype);");
+    push("Reflect.setPrototypeOf(" + escapeName(service.name) + ", wrapper.WSClient);");
 
     service.methodsArray.forEach(function(method) {
         method.resolve();
@@ -639,33 +664,47 @@ function buildService(ref, service) {
             "@param {Error|null} error Error, if any",
             "@param {" + exportName(method.resolvedResponseType) + "} [response] " + method.resolvedResponseType.name
         ]);
-        push("");
-        pushComment([
+
+        var comments = [
             method.comment || "Calls " + method.name + ".",
             "@function " + lcName,
-            "@memberof " + exportName(service),
             "@instance",
-            "@param {" + exportName(method.resolvedRequestType, !config.forceMessage) + "} request " + method.resolvedRequestType.name + " message or plain object",
-            "@param {" + exportName(service) + "." + cbName + "} callback Node-style callback called with the error, if any, and " + method.resolvedResponseType.name,
-            "@returns {undefined}",
-            "@variation 1"
-        ]);
-        push("Object.defineProperty(" + escapeName(service.name) + ".prototype" + util.safeProp(lcName) + " = function " + escapeName(lcName) + "(request, callback) {");
+            "@abstract",
+            "@memberof " + exportName(service)];
+
+        var params = "";
+        var functionCall = "";
+
+        if (!method.requestStream && !method.responseStream) {
+            comments.push("@param {" + exportName(method.resolvedRequestType, true) + "} param");
+            comments.push("@param {wrapper.DataCallback<" + method.responseType + ">} callback");
+            params = "param, callback";
+            functionCall = "return this.executeUnary('" + method.name + "', param, callback);";
+        }
+        else if (method.requestStream && !method.responseStream) {
+            comments.push("@param {wrapper.DataCallbackWithError<" + method.responseType + ">} callback");
+            comments.push("@return {wrapper.ClientStream<" + exportName(method.resolvedRequestType, true) + "," + method.responseType + ">}");
+            params = "callback";
+            functionCall = "return this.executeClientStream('" + method.name + "', callback);";
+        }
+        else if (!method.requestStream && method.responseStream) {
+            comments.push("@param {" + exportName(method.resolvedRequestType, true) + "} param");
+            comments.push("@return {wrapper.ServerStream<" + exportName(method.resolvedRequestType, true) + "," + method.responseType + ">}");
+            params = "param";
+            functionCall = "return this.executeServerStream('" + method.name + "', param);";
+        }
+        else if (method.requestStream && method.responseStream) {
+            comments.push("@return {wrapper.BidiStream<" + exportName(method.resolvedRequestType, true) + "," + method.responseType + ">}");
+            functionCall = "return this.executeBiDiStream('" + method.name + "');";
+        }
+
+        push("");
+        pushComment(comments);
+        push("Object.defineProperty(" + escapeName(service.name) + ".prototype" + util.safeProp(lcName) + " = function " + escapeName(lcName) + "(" + params + ") {");
             ++indent;
-            push("return this.rpcCall(" + escapeName(lcName) + ", $root." + exportName(method.resolvedRequestType) + ", $root." + exportName(method.resolvedResponseType) + ", request, callback);");
+            push(functionCall);
             --indent;
         push("}, \"name\", { value: " + JSON.stringify(method.name) + " });");
-        if (config.comments)
-            push("");
-        pushComment([
-            method.comment || "Calls " + method.name + ".",
-            "@function " + lcName,
-            "@memberof " + exportName(service),
-            "@instance",
-            "@param {" + exportName(method.resolvedRequestType, !config.forceMessage) + "} request " + method.resolvedRequestType.name + " message or plain object",
-            "@returns {Promise<" + exportName(method.resolvedResponseType) + ">} Promise",
-            "@variation 2"
-        ]);
     });
 }
 
