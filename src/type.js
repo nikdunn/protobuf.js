@@ -197,15 +197,21 @@ Object.defineProperties(Type.prototype, {
 Type.generateConstructor = function generateConstructor(mtype) {
     /* eslint-disable no-unexpected-multiline */
     var gen = util.codegen(["p"], mtype.name);
+    gen("if (p) {");
     // explicitly initialize mutable object/array fields so that these aren't just inherited from the prototype
-    for (var i = 0, field; i < mtype.fieldsArray.length; ++i)
-        if ((field = mtype._fieldsArray[i]).map) gen
-            ("this%s={}", util.safeProp(field.name));
-        else if (field.repeated) gen
-            ("this%s=[]", util.safeProp(field.name));
-    return gen
-    ("if(p)for(var ks=Object.keys(p),i=0;i<ks.length;++i)if(p[ks[i]]!=null)") // omit undefined or null
-        ("this[ks[i]]=p[ks[i]]");
+    for (var i = 0, field; i < mtype.fieldsArray.length; ++i) {
+        if ((field = mtype._fieldsArray[i]).map) {
+            gen("this%s={}", util.safeProp(field.name));
+        } 
+        else if (field.repeated) {
+            gen("this%s=[]", util.safeProp(field.name));
+        }
+
+        gen("this%s=p%s;", util.safeProp(field.name), util.safeProp(field.name));
+    }
+    gen("}");
+
+    return gen;
     /* eslint-enable no-unexpected-multiline */
 };
 
