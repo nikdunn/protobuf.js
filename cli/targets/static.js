@@ -403,7 +403,7 @@ function buildType(ref, type) {
         "@classdesc " + (type.comment || "Represents " + aOrAn(type.name) + "."),
         config.comments ? "@implements " + escapeName("I" + type.name) : null,
         "@constructor",
-        "@param {" + exportName(type, true) + "=} [" + (config.beautify ? "properties" : "p") + "] Properties to set"
+        "@param {" + exportName(type, true) + "} " + (config.beautify ? "properties" : "p") + " Properties to set"
     ]);
     buildFunction(type, type.name, Type.generateConstructor(type));
 
@@ -476,7 +476,7 @@ function buildType(ref, type) {
             "@function create",
             "@memberof " + exportName(type),
             "@static",
-            "@param {" + exportName(type, true) + "=} [properties] Properties to set",
+            "@param {" + exportName(type, true) + "} properties Properties to set",
             "@returns {" + exportName(type) + "} " + type.name + " instance"
         ]);
         push(escapeName(type.name) + ".create = function create(properties) {");
