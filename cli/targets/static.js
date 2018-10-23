@@ -47,6 +47,22 @@ function static_target(root, options, callback) {
         }
         var rootProp = util.safeProp(config.root || "default");
         push((config.es6 ? "const" : "var") + " $root = $protobuf.roots" + rootProp + " || ($protobuf.roots" + rootProp + " = {});");
+
+        push("/**");
+        push(" * @typedef SerializerDeserializer");
+        push(" * @type {Object}");
+        push(" * @property {protoLoader.Serialize<object>} serialize");
+        push(" * @property {protoLoader.Deserialize<object>} deserialize");
+        push(" */");
+        push("");
+        push("/**");
+        push(" * global type object.");
+        push(" * @exports resolvedTypes");
+        push(" * @const {Object.<string,SerializerDeserializer>} resolvedTypes");
+        push(" */");
+
+        push("$root.resolvedTypes = {};");
+
         buildNamespace(null, root);
         return callback(null, out.join("\n"));
     } catch (err) {
@@ -162,6 +178,14 @@ function buildNamespace(ref, ns) {
         }
     } else {
         if (ns.name !== "") {
+            push("");
+
+            push("$root.resolvedTypes['" + exportName(ns) + "'] = {");
+            ++indent;
+            push("serialize: " + escapeName(ns.name) + ".serialize,");
+            push("deserialize: " + escapeName(ns.name) + ".deserialize");
+            --indent;
+            push("}");
             push("");
             push("return " + escapeName(ns.name) + ";");
             --indent;
@@ -408,6 +432,9 @@ function buildType(ref, type) {
     buildFunction(type, type.name, Type.generateConstructor(type));
 
     // default values
+    push(escapeName(type.name) + ".prototype.initializeDefaults = function() {"); // overwritten in constructor
+    ++indent;
+
     var firstField = true;
     type.fieldsArray.forEach(function(field) {
         field.resolve();
@@ -428,20 +455,23 @@ function buildType(ref, type) {
             firstField = false;
         }
         if (field.repeated)
-            push(escapeName(type.name) + ".prototype" + prop + " = $util.emptyArray;"); // overwritten in constructor
+            push("this" + prop + " = $util.emptyArray;"); // overwritten in constructor
         else if (field.map)
-            push(escapeName(type.name) + ".prototype" + prop + " = $util.emptyObject;"); // overwritten in constructor
+            push("this" + prop + " = $util.emptyObject;"); // overwritten in constructor
         else if (field.long)
-            push(escapeName(type.name) + ".prototype" + prop + " = $util.Long ? $util.Long.fromBits("
+            push("this" + prop + " = $util.Long ? $util.Long.fromBits("
                     + JSON.stringify(field.typeDefault.low) + ","
                     + JSON.stringify(field.typeDefault.high) + ","
                     + JSON.stringify(field.typeDefault.unsigned)
                 + ") : " + field.typeDefault.toNumber(field.type.charAt(0) === "u") + ";");
         else if (field.bytes) {
-            push(escapeName(type.name) + ".prototype" + prop + " = $util.newBuffer(" + JSON.stringify(Array.prototype.slice.call(field.typeDefault)) + ");");
+            push("this" + prop + " = $util.newBuffer(" + JSON.stringify(Array.prototype.slice.call(field.typeDefault)) + ");");
         } else
-            push(escapeName(type.name) + ".prototype" + prop + " = " + JSON.stringify(field.typeDefault) + ";");
+            push("this" + prop + " = " + JSON.stringify(field.typeDefault) + ";");
     });
+
+    --indent;
+    push("}");
 
     // virtual oneof fields
     var firstOneOf = true;
@@ -608,6 +638,39 @@ function buildType(ref, type) {
         --indent;
         push("};");
     }
+
+    // serialize
+    push("");
+    pushComment([
+        "Serializes the specified " + type.name + " message.",
+        "@function serialize",
+        "@memberof " + exportName(type),
+        "@static",
+        "@param {" + exportName(type, !config.forceMessage) + "} " + (config.beautify ? "message" : "m") + " " + type.name + " message or plain object to encode",
+        "@returns {Buffer} Buffer"
+    ]);
+    push(escapeName(type.name) + ".serialize = function serialize(message) {");
+    ++indent;
+    push("return " + escapeName(type.name) + ".encode(message).finish();");
+    --indent;
+    push("};");
+
+    // deserialize
+    push("");
+    pushComment([
+        "Deserializes " + aOrAn(type.name) + " message from the specified buffer.",
+        "@function deserialize",
+        "@memberof " + exportName(type),
+        "@static",
+        "@param {Uint8Array} " + (config.beautify ? "buffer" : "b") + " Buffer to decode from",
+        "@returns {" + exportName(type) + "} " + type.name,
+    ]);
+
+    push(escapeName(type.name) + ".deserialize = function deserialize(buffer) {");
+    ++indent;
+        push("return " + escapeName(type.name) + ".decode(buffer);");
+    --indent;
+    push("};");
 }
 
 function buildService(ref, service) {

@@ -398,7 +398,7 @@ function writeInterfaceBody(element) {
 function writeProperty(property, declare) {
     writeComment(property.description);
     if (declare)
-        write("let ");
+        write("");
     write(property.name);
     if (property.optional)
         write("?");

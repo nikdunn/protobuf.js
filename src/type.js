@@ -197,6 +197,8 @@ Object.defineProperties(Type.prototype, {
 Type.generateConstructor = function generateConstructor(mtype) {
     /* eslint-disable no-unexpected-multiline */
     var gen = util.codegen(["p"], mtype.name);
+    gen("this.initializeDefaults();");
+    gen("");
     gen("if (p) {");
     // explicitly initialize mutable object/array fields so that these aren't just inherited from the prototype
     for (var i = 0, field; i < mtype.fieldsArray.length; ++i) {
