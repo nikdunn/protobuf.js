@@ -704,7 +704,7 @@ function buildService(ref, service) {
                 comments.push("@param {grpc.sendUnaryData<" + exportName(method.resolvedResponseType, true) + ">} callback");
             }
             else if (!method.requestStream && method.responseStream) {
-                comments.push("@param {grpc.ServerWriteableStream<" + method.requestType + ">} call");
+                comments.push(`@param {grpc.ServerWriteableStream<${method.requestType},${exportName(method.resolvedResponseType)}>} call`);
             }
             else if (method.requestStream && method.responseStream) {
                 comments.push("@param {grpc.ServerDuplexStream<" + method.requestType + "," + exportName(method.resolvedResponseType, true) + ">} call");
