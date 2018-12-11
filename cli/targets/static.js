@@ -800,7 +800,7 @@ function buildService(ref, service) {
 
         if (!method.requestStream && !method.responseStream) {
             comments.push("@param {" + exportName(method.resolvedRequestType, true) + "} param");
-            comments.push("@param {wrapper.DataCallback<" + method.responseType + ">} callback");
+            comments.push("@param {wrapper.DataCallbackWithError<" + method.responseType + ">} callback");
             params = "param, callback";
             functionCall = "return this.executeUnary('" + method.name + "', param, callback);";
         }
