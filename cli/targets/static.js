@@ -766,7 +766,7 @@ function buildService(ref, service) {
         "@param {wrapper.Logger} logger 'consolelike' object to log to",
         "@param {wrapper.Callback} callback callback to call when the websocket makes a connection and is ready.",
     ]);
-    push("function " + escapeName(service.name) + "WebSocket(ws, callback) {");
+    push("function " + escapeName(service.name) + "WebSocket(ws, logger, callback) {");
     ++indent;
     push("return Reflect.construct(wrapper.WSClient, arguments, " + escapeName(service.name) + 'WebSocket);');
     --indent;
