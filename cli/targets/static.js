@@ -763,6 +763,7 @@ function buildService(ref, service) {
         "@extends wrapper.WSClient",
         "@constructor",
         "@param {ws} websocket WebSocket to communicate on",
+        "@param {wrapper.Logger} logger 'consolelike' object to log to",
         "@param {wrapper.Callback} callback callback to call when the websocket makes a connection and is ready.",
     ]);
     push("function " + escapeName(service.name) + "WebSocket(ws, callback) {");
