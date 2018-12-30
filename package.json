@@ -1,6 +1,6 @@
 {
   "name": "@elastisim/protobufjs",
-  "version": "6.8.16",
+  "version": "6.8.17",
   "versionScheme": "~",
   "description": "Protocol Buffers for JavaScript (& TypeScript).",
   "author": "Daniel Wirtz <dcode+protobufjs@dcode.io>",
